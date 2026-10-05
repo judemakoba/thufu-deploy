@@ -1,9 +1,9 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Configure your LAN IP here for local testing (http://192.168.1.66:3001/api)
-// For production/remote: use your LXC 203 public URL
-const BASE_URL = 'http://192.168.1.66:3001/api';
+// Thufu Deploy — Tailscale Funnel public URL
+// For LAN testing: http://192.168.1.18:3001/api
+const BASE_URL = 'https://pve.tailfd1512.ts.net/api';
 
 const api = axios.create({
   baseURL: BASE_URL,
