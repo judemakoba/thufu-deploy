@@ -29,6 +29,10 @@ async function bootstrap() {
   // Static uploads
   app.use('/uploads', express.static(path.join(process.cwd(), process.env.UPLOAD_DIR || 'uploads')));
 
+  // Admin panel (built React app)
+  const adminDistPath = path.join(process.cwd(), '..', 'admin', 'dist');
+  app.use(express.static(adminDistPath));
+
   // Health check
   app.get('/api/health', (_req, res) => {
     res.json({ success: true, status: 'ok', service: 'Thufu Deploy API', version: '1.0.0' });
@@ -37,6 +41,15 @@ async function bootstrap() {
   // Routes
   app.use('/api/admin', adminRoutes);
   app.use('/api/mobile', mobileRoutes);
+
+  // SPA catch-all — serve admin index for non-API routes
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api')) {
+      res.sendFile(path.join(adminDistPath, 'index.html'));
+    } else {
+      next();
+    }
+  });
 
   // 404 handler
   app.use('/api/*', (_req, res) => {
@@ -53,7 +66,7 @@ async function bootstrap() {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🚀 Thufu Deploy API running on http://0.0.0.0:${PORT}`);
     console.log(`   LAN:  http://${LAN_IP}:${PORT}`);
-    console.log(`📋 Admin dashboard:  http://${LAN_IP}:${PORT}/api/admin`);
+    console.log(`📋 Admin dashboard:  http://${LAN_IP}:${PORT}/`);
     console.log(`📱 Mobile API:       http://${LAN_IP}:${PORT}/api/mobile`);
     console.log(`❤️  Health check:    http://${LAN_IP}:${PORT}/api/health\n`);
   });
