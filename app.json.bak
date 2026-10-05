@@ -1,0 +1,50 @@
+{
+  "expo": {
+    "name": "Thufu Deploy",
+    "slug": "thufu-deploy",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./mobile/assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./mobile/assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1e3a8a"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.thufu.deploy",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Thufu Deploy needs camera access to capture site photos.",
+        "NSLocationWhenInUseUsageDescription": "Thufu Deploy needs your location to record GPS coordinates.",
+        "NSPhotoLibraryUsageDescription": "Thufu Deploy needs photo library access to save site photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./mobile/assets/adaptive-icon.png",
+        "backgroundColor": "#1e3a8a"
+      },
+      "package": "com.thufu.deploy",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "plugins": [
+      "expo-location",
+      "expo-camera",
+      "expo-image-picker"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "thufu-deploy"
+      }
+    }
+  }
+}

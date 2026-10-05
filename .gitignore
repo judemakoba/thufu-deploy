@@ -1,0 +1,11 @@
+node_modules/
+.env
+dist/
+*.log
+.DS_Store
+backend/data/*.db
+backend/data/*.db-journal
+*.apk
+mobile/android/.gradle/
+mobile/android/app/build/
+mobile/android/build/

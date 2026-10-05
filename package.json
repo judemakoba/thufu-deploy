@@ -1,0 +1,17 @@
+{
+  "name": "thufu-deploy",
+  "version": "1.0.0",
+  "description": "Thufu Deploy - ISDP-inspired Survey & Field Audit Platform",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "admin",
+    "mobile"
+  ],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:admin": "npm run dev --workspace=admin",
+    "build:admin": "npm run build --workspace=admin",
+    "build:mobile": "npm run build --workspace=mobile"
+  }
+}
