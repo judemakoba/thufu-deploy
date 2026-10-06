@@ -9,6 +9,9 @@ buildscript {
         kotlinVersion = findProperty('android.kotlinVersion') ?: '1.8.10'
 
         ndkVersion = "25.1.8937393"
+
+        // Required by expo/android/build.gradle to determine RN version compatibility
+        reactNativeVersion = findProperty('reactNativeVersion') ?: '0.73.4'
     }
     repositories {
         google()

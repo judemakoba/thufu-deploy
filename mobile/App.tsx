@@ -2,11 +2,9 @@
 // Lives at thufu-deploy/mobile/App.tsx — direct entry point (no expo/AppEntry.js)
 // All paths relative to mobile/ directory
 
-// CRITICAL: Set window BEFORE any module code runs. In JSC, 'window' is NOT
-// automatically a globalThis property. Metro's runtime code at bundle position ~6247
-// does 'typeof window !== undefined' which would crash without this.
+// Polyfill: In JSC, 'window' is NOT automatically a globalThis property.
+// Metro's runtime code does 'typeof window !== undefined' which would crash without this.
 // Setting globalThis.window = globalThis makes 'window' and 'globalThis' equivalent.
-// This MUST run before any Metro/__r/require code, so it's at the very top.
 (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
 (globalThis as unknown as { location: typeof globalThis.location }).location = {
   href: 'https://localhost',
@@ -16,7 +14,8 @@
   origin: 'https://localhost',
 };
 
-import React, { useEffect, useState } from 'react';
+import React, { Component, useEffect, useState } from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -28,18 +27,44 @@ import SubmissionDetailScreen from './src/screens/SubmissionDetailScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import { RootStackParamList } from './src/navigation/types';
 
+// ErrorBoundary catches JS errors and shows a visible screen instead of crashing silently
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMessage: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMessage: '' };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMessage: error.message + '\n\n' + (error.stack || '') };
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.errorContainer}>
+          <Text style={styles.errorTitle}>App Error</Text>
+          <Text style={styles.errorText}>{this.state.errorMessage}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function App() {
+function AppNavigator() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem('thufu_token').then(token => {
-      setIsAuthenticated(!!token);
-    });
+    AsyncStorage.getItem('thufu_token')
+      .then(token => setIsAuthenticated(!!token))
+      .catch(() => setIsAuthenticated(false));
   }, []);
 
   if (isAuthenticated === null) {
+    // Loading — return null to show nothing (splash screen handles this)
     return null;
   }
 
@@ -63,3 +88,32 @@ export default function App() {
     </NavigationContainer>
   );
 }
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <AppNavigator />
+    </ErrorBoundary>
+  );
+}
+
+const styles = StyleSheet.create({
+  errorContainer: {
+    flex: 1,
+    backgroundColor: '#1e3a8a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#fca5a5',
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+});

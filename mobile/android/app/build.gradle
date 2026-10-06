@@ -19,7 +19,7 @@ react {
     hermesCommand = projectRoot + "/mobile/node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
     codegenDir = file(projectRoot + "/mobile/node_modules/@react-native/codegen")
 
-    // Use Expo CLI to bundle (has export:embed command for native app bundling)
+    // Use Expo CLI to bundle
     cliFile = file(projectRoot + "/node_modules/expo/bin/cli")
     bundleCommand = "export:embed"
 
@@ -40,6 +40,9 @@ react {
     //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
     // Force-bundle JS into debug APK so it works without Metro
     debuggableVariants = []
+
+    // CRITICAL: Hermes must be ON — JSC crashes on 'window' in standalone APK
+    hermesEnabled = true
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.

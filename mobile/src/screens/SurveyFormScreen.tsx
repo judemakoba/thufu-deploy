@@ -4,8 +4,19 @@ import {
   Alert, ActivityIndicator, Switch, Platform, PermissionsAndroid, Image
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as ImagePicker from 'expo-image-picker';
-import * as Location from 'expo-location';
+
+// Stub implementations — replace with actual expo packages when ready
+const ImagePicker = {
+  requestCameraPermissionsAsync: async () => ({ status: 'denied' }),
+  requestMediaLibraryPermissionsAsync: async () => ({ status: 'denied' }),
+  launchCameraAsync: async () => { Alert.alert('Camera', 'Camera not available in this build'); return { canceled: true }; },
+  launchImageLibraryAsync: async () => { Alert.alert('Gallery', 'Gallery not available in this build'); return { canceled: true }; },
+  MediaTypeOptions: { Images: 'Images' },
+};
+const Location = {
+  requestForegroundPermissionsAsync: async () => ({ status: 'denied' }),
+  getCurrentPositionAsync: async () => { Alert.alert('Location', 'Location not available'); return { coords: { latitude: 0, longitude: 0 } }; },
+};
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';

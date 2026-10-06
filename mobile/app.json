@@ -36,11 +36,7 @@
         "WRITE_EXTERNAL_STORAGE"
       ]
     },
-    "plugins": [
-      "expo-location",
-      "expo-camera",
-      "expo-image-picker"
-    ],
+    "plugins": [],
     "extra": {
       "eas": {
         "projectId": "thufu-deploy"
