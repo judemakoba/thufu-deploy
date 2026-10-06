@@ -1,6 +1,21 @@
 // Main App entry point for Thufu Deploy mobile app
 // Lives at thufu-deploy/mobile/App.tsx — direct entry point (no expo/AppEntry.js)
 // All paths relative to mobile/ directory
+
+// CRITICAL: Set window BEFORE any module code runs. In JSC, 'window' is NOT
+// automatically a globalThis property. Metro's runtime code at bundle position ~6247
+// does 'typeof window !== undefined' which would crash without this.
+// Setting globalThis.window = globalThis makes 'window' and 'globalThis' equivalent.
+// This MUST run before any Metro/__r/require code, so it's at the very top.
+(globalThis as unknown as { window: typeof globalThis }).window = globalThis;
+(globalThis as unknown as { location: typeof globalThis.location }).location = {
+  href: 'https://localhost',
+  hostname: 'localhost',
+  pathname: '/',
+  protocol: 'https:',
+  origin: 'https://localhost',
+};
+
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
