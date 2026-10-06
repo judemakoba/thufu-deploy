@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+  <!--
+    Thufu Deploy app icon foreground
+    Cell tower / survey mast — mustard yellow on blue background
+    Centered in the safe zone (trimmed 18dp each side from 108dp canvas)
+  -->
+
+  <!-- Main tower mast — vertical center line -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M53,18 L55,18 L55,82 L53,82 Z"/>
+
+  <!-- Tower base (wider at bottom) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M45,82 L63,82 L60,75 L48,75 Z"/>
+
+  <!-- Left diagonal bracing -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M48,75 L54,35 L56,35 L50,75 Z"/>
+
+  <!-- Right diagonal bracing -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M60,75 L54,35 L56,35 L62,75 Z"/>
+
+  <!-- X brace top left -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M49,62 L54,45 L56,45 L51,62 Z"/>
+
+  <!-- X brace top right -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M59,62 L54,45 L56,45 L61,62 Z"/>
+
+  <!-- X brace mid left -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M48.5,52 L54,32 L56,32 L50.5,52 Z"/>
+
+  <!-- X brace mid right -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M59.5,52 L54,32 L56,32 L61.5,52 Z"/>
+
+  <!-- Left antenna panel (tall narrow rectangle) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M40,28 L47,28 L47,50 L40,50 Z"/>
+
+  <!-- Right antenna panel (tall narrow rectangle) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M61,28 L68,28 L68,50 L61,50 Z"/>
+
+  <!-- Antenna top left spike -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M43,28 L44,18 L45,18 L44,28 Z"/>
+
+  <!-- Antenna top right spike -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M63,28 L64,16 L65,16 L64,28 Z"/>
+
+  <!-- Satellite dish (circle, left side) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M38,56 m-5,0 a5,5 0 1,0 10,0 a5,5 0 1,0 -10,0"/>
+
+  <!-- Satellite dish inner dot -->
+  <path
+      android:fillColor="#1e3a8a"
+      android:pathData="M38,56 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+
+  <!-- Dish arm connecting to mast -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M38,51 L43,56 L43,57 L38,52 Z"/>
+
+  <!-- Right side parabolic dish (C-shape) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M71,44 Q78,50 71,58 L70,57 Q76,51 70,46 Z"/>
+
+  <!-- Right dish connector -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M67,51 L70,51 L70,52 L67,52 Z"/>
+
+  <!-- Signal waves left (arcs) -->
+  <path
+      android:fillColor="#F4C430"
+      android:strokeColor="#F4C430"
+      android:strokeWidth="1.5"
+      android:pathData="M31,40 Q28,45 31,50"/>
+
+  <path
+      android:fillColor="#F4C430"
+      android:strokeColor="#F4C430"
+      android:strokeWidth="1.5"
+      android:pathData="M27,37 Q22,45 27,53"/>
+
+  <!-- Signal waves right (arcs) -->
+  <path
+      android:fillColor="#F4C430"
+      android:strokeColor="#F4C430"
+      android:strokeWidth="1.5"
+      android:pathData="M77,40 Q80,45 77,50"/>
+
+  <path
+      android:fillColor="#F4C430"
+      android:strokeColor="#F4C430"
+      android:strokeWidth="1.5"
+      android:pathData="M81,37 Q86,45 81,53"/>
+
+  <!-- Small circle bottom right -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M64,66 m-3,0 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0"/>
+
+  <!-- Small circle top center (tiny antenna tip) -->
+  <path
+      android:fillColor="#F4C430"
+      android:pathData="M54,15 m-2,0 a2,2 0 1,0 4,0 a2,2 0 1,0 -4,0"/>
+
+</vector>
