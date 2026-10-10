@@ -4,7 +4,7 @@ export type RootStackParamList = {
   Login: undefined;
   Home: undefined;
   SurveyList: { templateId?: string };
-  SurveyForm: { assignmentId: string; templateId: string; recordType: string };
+  SurveyForm: { assignmentId: string; templateId: string; recordType: string; site_id: string };
   SubmissionDetail: { submissionId: string };
   Profile: undefined;
 };

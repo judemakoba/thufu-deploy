@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import path from 'path';
 import dotenv from 'dotenv';
 import { initializeDatabase } from './db/database';
+import { seedIfEmpty } from './db/seed_on_startup';
 import adminRoutes from './routes/admin';
 import mobileRoutes from './routes/mobile';
 
@@ -13,6 +14,7 @@ dotenv.config();
 async function bootstrap() {
   // Initialize database before accepting requests
   await initializeDatabase();
+  await seedIfEmpty();
 
   const app = express();
   const PORT = Number(process.env.PORT) || 3001;

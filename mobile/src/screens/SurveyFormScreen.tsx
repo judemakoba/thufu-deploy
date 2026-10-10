@@ -51,7 +51,7 @@ interface Section {
 const AUTOFILL_FIELDS = ['technician_name', 'survey_date', 'latitude', 'longitude', 'altitude', 'gps_accuracy'];
 
 export default function SurveyFormScreen({ navigation, route }: Props) {
-  const { assignmentId, templateId, recordType } = route.params;
+  const { assignmentId, templateId, recordType, site_id } = route.params;
 
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +121,7 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
     const draftData = {
       submission_id: draftId,
       assignment_id: assignmentId,
-      site_id: route.params?.site_id || 'unknown',
+      site_id: site_id,
       answers: answersToSave,
       photos: photosToSave,
       saved_at: Date.now(),
@@ -143,7 +143,6 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: false,
       quality: 0.7,
-     地理: gps ? { latitude: gps.lat, longitude: gps.lng } : undefined,
     });
 
     if (!result.canceled && result.assets[0]) {
@@ -204,14 +203,10 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
         text: 'Submit', onPress: async () => {
           setSaving(true);
           try {
-            // Get site_id from draft or assignment
-            const draftRaw = await AsyncStorage.getItem(`draft_${assignmentId}`);
-            const siteId = draftRaw ? JSON.parse(draftRaw).site_id : 'unknown';
-
             const payload = {
               record_type: recordType,
               submission_id: draftId || undefined,
-              site_id: siteId,
+              site_id: site_id,
               answers: {
                 ...answers,
                 technician_contact: answers.technician_contact || '',
@@ -242,9 +237,6 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
   const handleSaveDraft = async () => {
     setSaving(true);
     try {
-      const draftRaw = await AsyncStorage.getItem(`draft_${assignmentId}`);
-      const siteId = draftRaw ? JSON.parse(draftRaw).site_id : 'unknown';
-
       await saveDraft(answers, photos);
       Alert.alert('Draft Saved', 'Your progress has been saved locally.');
     } finally {
@@ -450,7 +442,7 @@ const styles = StyleSheet.create({
   fieldHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   fieldLabel: { fontSize: 14, fontWeight: '600', color: '#111827' },
   required: { color: '#ef4444', marginLeft: 4, fontSize: 16 },
-  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff' },
+  input: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, backgroundColor: '#fff', color: '#1f2937' },
   textarea: { height: 80, textAlignVertical: 'top', paddingTop: 12 },
   optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   optionButton: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: '#d1d5db', backgroundColor: '#fff' },

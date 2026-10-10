@@ -47,11 +47,30 @@ export default function HomeScreen({ navigation }: Props) {
 
   const syncQueue = async () => {
     if (queueCount === 0) return;
-    Alert.alert('Syncing...', `Processing ${queueCount} offline items`);
-    const remaining = await processQueue();
-    setQueueCount(remaining.length);
-    if (remaining.length === 0) {
-      Alert.alert('Success', 'All offline data synced!');
+    Alert.alert(
+      'Syncing...',
+      `Uploading ${queueCount} item(s). Please wait.`,
+      [{ text: 'OK' }]
+    );
+    try {
+      const remaining = await processQueue();
+      setQueueCount(remaining.length);
+      if (remaining.length === 0) {
+        Alert.alert('Success', 'All offline data synced!');
+      } else {
+        Alert.alert('Partial Sync', `${queueCount - remaining.length} uploaded. ${remaining.length} failed — will retry on next sync.`);
+      }
+      // Refresh assignments to show updated status
+      await fetchAssignments();
+    } catch (err: unknown) {
+      const msg = (err as Error)?.message;
+      if (msg === 'AUTH_EXPIRED') {
+        Alert.alert('Session Expired', 'Please log out and log back in to sync your data.', [
+          { text: 'OK' }
+        ]);
+      } else {
+        Alert.alert('Sync Failed', 'Could not reach the server. Your data is safe locally and will retry automatically.');
+      }
     }
   };
 
@@ -103,6 +122,7 @@ export default function HomeScreen({ navigation }: Props) {
             templateId: item.template_id,
             recordType: item.template_name.toLowerCase().includes('ground') ? 'ground_info'
               : item.template_name.toLowerCase().includes('dcdb') ? 'dcdb_info' : 'tower_info',
+            site_id: item.site_id, // internal UUID from survey_assignments table
           });
         } else {
           navigation.navigate('SubmissionDetail', { submissionId: item.id });

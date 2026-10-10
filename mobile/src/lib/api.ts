@@ -18,11 +18,13 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-// Handle 401
+// Handle 401 — clear token only for login failures, propagate auth errors for other endpoints
 api.interceptors.response.use(
   r => r,
   (err) => {
-    if (err.response?.status === 401) {
+    // Only clear token on 401 for login endpoint — sync/auth failures need different handling
+    const isLogin = err.config?.url?.includes('/auth/login');
+    if (err.response?.status === 401 && isLogin) {
       AsyncStorage.removeItem('thufu_token');
     }
     return Promise.reject(err);
@@ -89,8 +91,15 @@ export const processQueue = async () => {
       if (item.type === 'sync') {
         await syncSubmission(item.payload);
       }
-    } catch {
-      remaining.push(item); // Keep failed items
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      // Auth failure (401) — token invalid/expired, stop retrying and signal re-login
+      if (axiosErr?.response?.status === 401) {
+        await AsyncStorage.setItem(OFFLINE_QUEUE_KEY, JSON.stringify(queue));
+        throw new Error('AUTH_EXPIRED');
+      }
+      // Network/server errors — keep in queue for retry
+      remaining.push(item);
     }
   }
 
