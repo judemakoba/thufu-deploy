@@ -202,7 +202,7 @@ export async function deleteSite(req: Request, res: Response): Promise<void> {
 // ---- Survey Assignments -----
 
 export async function listAssignments(req: Request, res: Response): Promise<void> {
-  const { status, page = 1, limit = 50 } = req.query;
+  const { status, page = 1, limit = 50, assigned_to } = req.query;
   const offset = (Number(page) - 1) * Number(limit);
 
   let sql = `
@@ -212,9 +212,21 @@ export async function listAssignments(req: Request, res: Response): Promise<void
     JOIN survey_templates st ON st.id = sa.template_id
     JOIN sites s ON s.id = sa.site_id
     JOIN users u ON u.id = sa.assigned_to
-    WHERE sa.tenant_id = ? AND sa.assigned_to = ?`;
+    WHERE sa.tenant_id = ?`;
 
-  const params: unknown[] = [req.tenantId, req.user!.userId];
+  const params: unknown[] = [req.tenantId];
+
+  // Admins see all assignments in tenant; surveyors/reviewers see only theirs
+  if (assigned_to) {
+    // Admin explicitly filtering by a specific surveyor
+    sql += ' AND sa.assigned_to = ?';
+    params.push(assigned_to);
+  } else if (req.user!.role !== 'admin') {
+    // Non-admin: only their own assignments
+    sql += ' AND sa.assigned_to = ?';
+    params.push(req.user!.userId);
+  }
+  // Admins with no filter: see all assignments in tenant (no assigned_to clause added)
 
   if (status) {
     sql += ' AND sa.status = ?';
