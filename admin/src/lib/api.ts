@@ -59,6 +59,9 @@ export const updateSubmission = (id: string, data: { status?: string; review_not
   api.patch(`/admin/submissions/${id}`, data);
 
 // Assignments
+export const listAssignments = (params?: { page?: number; status?: string; assigned_to?: string }) =>
+  api.get('/admin/assignments', { params });
+
 export const createAssignment = (data: Record<string, unknown>) =>
   api.post('/admin/assignments', data);
 
