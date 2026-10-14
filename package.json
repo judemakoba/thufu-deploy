@@ -5,13 +5,16 @@
   "private": true,
   "workspaces": [
     "backend",
-    "admin",
-    "mobile"
+    "admin"
   ],
   "scripts": {
     "dev:backend": "npm run dev --workspace=backend",
     "dev:admin": "npm run dev --workspace=admin",
     "build:admin": "npm run build --workspace=admin",
     "build:mobile": "npm run build --workspace=mobile"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
   }
 }

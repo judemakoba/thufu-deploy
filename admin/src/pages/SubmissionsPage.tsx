@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { listSubmissions } from '../lib/api';
 import { Submission, STATUS_COLORS, RECORD_TYPE_LABELS } from '../lib/types';
 import { format } from 'date-fns';
-import { Eye, Filter } from 'lucide-react';
+import { Eye, Filter, Bug } from 'lucide-react';
 
 export default function SubmissionsPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
@@ -14,8 +14,14 @@ export default function SubmissionsPage() {
   const fetch = () => {
     setLoading(true);
     listSubmissions({ status: statusFilter || undefined, record_type: typeFilter || undefined })
-      .then(r => setSubmissions(r.data.data))
-      .catch(console.error)
+      .then(r => {
+        console.debug('[Submissions] API response:', r.data);
+        setSubmissions(r.data.data);
+      })
+      .catch(err => {
+        console.error('[Submissions] API error:', err);
+        alert('Failed to load submissions: ' + (err.response?.data?.error || err.message));
+      })
       .finally(() => setLoading(false));
   };
 

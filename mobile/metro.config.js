@@ -1,25 +1,33 @@
-// Metro config for Thufu Deploy monorepo
-// expo at thufu-deploy/node_modules, react-native at thufu-deploy/mobile/node_modules
-const { getDefaultConfig } = require('@expo/metro-config');
+const {getDefaultConfig, mergeConfig} = require('@react-native/metro-config');
 const path = require('path');
 
-const projectRoot = path.resolve(__dirname);           // thufu-deploy/mobile/
-const monorepoRoot = path.resolve(projectRoot, '..'); // thufu-deploy/
+// Paths
+const projectRoot = __dirname;                           // thufu-deploy/mobile/
+const monorepoRoot = path.resolve(projectRoot, '..');   // thufu-deploy/
 
-const config = getDefaultConfig(projectRoot);
+const config = {
+  projectRoot,
+  watchFolders: [monorepoRoot],
 
-// Override assetRegistryPath so Metro finds the real asset registry
-config.transformer = config.transformer || {};
-config.transformer.assetRegistryPath = require.resolve(
-  '@react-native/assets-registry/registry',
-  { paths: [path.join(projectRoot, 'node_modules')] }
-);
+  // Critical: resolve react-native from mobile/node_modules (RN 0.73.4), not root (RN 18.3.1)
+  resolver: {
+    nodeModulesPaths: [
+      path.join(projectRoot, 'node_modules'),   // mobile/node_modules/
+      path.join(monorepoRoot, 'node_modules'), // thufu-deploy/node_modules/
+    ],
+  },
 
-// Override nodeModulesPaths to include BOTH roots so Metro finds all packages
-config.resolver = config.resolver || {};
-config.resolver.nodeModulesPaths = [
-  monorepoRoot + '/node_modules',   // thufu-deploy/node_modules
-  projectRoot + '/node_modules',   // thufu-deploy/mobile/node_modules
-];
+  // Ensure react-native resolves from mobile/node_modules
+  resolveRequest: (context, moduleName, platform) => {
+    if (moduleName === 'react-native') {
+      const rnPath = path.join(projectRoot, 'node_modules/react-native/package.json');
+      return {
+        filePath: rnPath,
+        type: 'sourceFile',
+      };
+    }
+    return context.resolveRequest(context, moduleName, platform);
+  },
+};
 
-module.exports = config;
+module.exports = mergeConfig(getDefaultConfig(projectRoot), config);

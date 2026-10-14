@@ -1,26 +1,60 @@
 import React, { useEffect, useState, useRef } from 'react';
 import {
   View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet,
-  Alert, ActivityIndicator, Switch, Platform, PermissionsAndroid, Image
+  Alert, ActivityIndicator, Switch, Platform, PermissionsAndroid, Image, Linking, Modal
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Stub implementations — replace with actual expo packages when ready
-const ImagePicker = {
-  requestCameraPermissionsAsync: async () => ({ status: 'denied' }),
-  requestMediaLibraryPermissionsAsync: async () => ({ status: 'denied' }),
-  launchCameraAsync: async () => { Alert.alert('Camera', 'Camera not available in this build'); return { canceled: true }; },
-  launchImageLibraryAsync: async () => { Alert.alert('Gallery', 'Gallery not available in this build'); return { canceled: true }; },
-  MediaTypeOptions: { Images: 'Images' },
-};
-const Location = {
-  requestForegroundPermissionsAsync: async () => ({ status: 'denied' }),
-  getCurrentPositionAsync: async () => { Alert.alert('Location', 'Location not available'); return { coords: { latitude: 0, longitude: 0 } }; },
-};
+import { launchCamera, launchImageLibrary, CameraOptions, ImagePickerResponse } from 'react-native-image-picker';
+import Geolocation from '@react-native-community/geolocation';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RouteProp } from '@react-navigation/native';
 import { RootStackParamList } from '../navigation/types';
 import { getTemplate, syncSubmission, addToQueue } from '../lib/api';
+import GpsCaptureScreen from './GpsCaptureScreen';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERMISSION HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Request camera permission on Android */
+async function requestCameraPermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  try {
+    const granted = await PermissionsAndroid.request(
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      {
+        title: 'Camera Permission',
+        message: 'ThufuDeploy needs camera access to photograph site equipment, name plates, and survey documentation.',
+        buttonNeutral: 'Ask Me Later',
+        buttonNegative: 'Cancel',
+        buttonPositive: 'Allow',
+      },
+    );
+    return granted === PermissionsAndroid.RESULTS.GRANTED;
+  } catch { return false; }
+}
+
+/** Request storage permission on Android (saving drafts) */
+async function requestStoragePermission(): Promise<boolean> {
+  if (Platform.OS !== 'android') return true;
+  if (Platform.Version < 33) {
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
+        { title: 'Storage Permission', message: 'ThufuDeploy needs storage access to save survey drafts and photos.', buttonNeutral: 'Ask Me Later', buttonNegative: 'Cancel', buttonPositive: 'Allow' },
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch { return false; }
+  }
+  return true;
+}
+
+/** Open device settings page */
+function openSettings(): void { Linking.openSettings(); }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TYPES
+// ─────────────────────────────────────────────────────────────────────────────
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'SurveyForm'>;
@@ -32,13 +66,8 @@ interface Question {
   field_name: string;
   label: string;
   input_type: string;
-  required: number; // 0 or 1 from backend
-  options: string | null; // JSON string from backend
-}
-
-function parseOptions(opts: string | null): { value: string; label: string }[] {
-  if (!opts) return [];
-  try { return JSON.parse(opts); } catch { return []; }
+  required: number;
+  options: string | null;
 }
 
 interface Section {
@@ -47,22 +76,33 @@ interface Section {
   questions: Question[];
 }
 
-// Auto-fill fields
-const AUTOFILL_FIELDS = ['technician_name', 'survey_date', 'latitude', 'longitude', 'altitude', 'gps_accuracy'];
+function parseOptions(opts: string | null): { value: string; label: string }[] {
+  if (!opts) return [];
+  try { return JSON.parse(opts); } catch { return []; }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COMPONENT
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function SurveyFormScreen({ navigation, route }: Props) {
-  const { assignmentId, templateId, recordType, site_id } = route.params;
+  const { assignmentId, templateId, recordType, site_id, site_name } = route.params;
 
   const [sections, setSections] = useState<Section[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [answers, setAnswers] = useState<Record<string, unknown>>({});
-  const [photos, setPhotos] = useState<Record<string, string[]>>({}); // field_name → URIs
+  const [photos, setPhotos] = useState<Record<string, string[]>>({});
   const [gps, setGps] = useState<{ lat: number; lng: number; alt: number; accuracy: number } | null>(null);
   const [currentSection, setCurrentSection] = useState(0);
   const [draftId, setDraftId] = useState<string | null>(null);
+  const [previewPhoto, setPreviewPhoto] = useState<string | null>(null);
+  const [showGpsCapture, setShowGpsCapture] = useState(false);
+  const [gpsScreenshotField, setGpsScreenshotField] = useState<string>('');
+  const gpsWatchIdRef = useRef<number | null>(null);
+  const gpsFilledRef = useRef(false); // fill answers once on first good fix
 
-  // Load draft from local storage
+  // Load saved draft
   const loadDraft = async () => {
     const raw = await AsyncStorage.getItem(`draft_${assignmentId}`);
     if (raw) {
@@ -73,60 +113,101 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
     }
   };
 
-  // Auto-fill device data
+  // Auto-fill GPS — polls getCurrentPosition every 2s, fills on first fix, then stops
   const autoFill = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission Denied', 'Location permission is needed for GPS auto-fill.');
-      return;
-    }
+    // Technician name
+    try {
+      const userRaw = await AsyncStorage.getItem('thufu_user');
+      if (userRaw) {
+        const user = JSON.parse(userRaw);
+        setAnswers(prev => ({ ...prev, technician_name: user.full_name || user.name || '' }));
+      }
+    } catch { /* ignore */ }
 
-    const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    const { latitude, longitude, altitude, accuracy } = location.coords;
-    setGps({ lat: latitude, lng: longitude, alt: altitude || 0, accuracy });
-    setAnswers(prev => ({
-      ...prev,
-      latitude, longitude, altitude,
-      gps_accuracy: accuracy,
-      survey_date: new Date().toISOString(),
-    }));
+    let attempts = 0;
+    const MAX_ATTEMPTS = 30; // 60s max
 
-    // Auto-fill technician name from stored profile
-    const userRaw = await AsyncStorage.getItem('thufu_user');
-    if (userRaw) {
-      const user = JSON.parse(userRaw);
-      setAnswers(prev => ({ ...prev, technician_name: user.full_name }));
+    const poll = async () => {
+      if (gpsFilledRef.current) return; // already filled
+      attempts++;
+      try {
+        const pos = await new Promise<Geolocation.GeoPosition>((resolve, reject) => {
+          Geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          });
+        });
+        const { latitude, longitude, altitude, accuracy } = pos.coords;
+        setGps({ lat: latitude, lng: longitude, alt: altitude ?? 0, accuracy });
+        if (!gpsFilledRef.current) {
+          gpsFilledRef.current = true;
+          clearInterval(gpsWatchIdRef.current ?? undefined);
+          gpsWatchIdRef.current = null;
+          setAnswers(prev => ({
+            ...prev,
+            latitude,
+            longitude,
+            altitude: altitude ?? 0,
+            gps_accuracy: accuracy,
+            survey_date: new Date().toISOString(),
+          }));
+        }
+      } catch (err) {
+        if (attempts >= MAX_ATTEMPTS) {
+          clearInterval(gpsWatchIdRef.current ?? undefined);
+          gpsWatchIdRef.current = null;
+          const msg = err instanceof Error ? err.message : 'Unknown error';
+          if (msg.toLowerCase().includes('permission') || msg.toLowerCase().includes('denied')) {
+            Alert.alert('Location Permission Required', 'ThufuDeploy needs location access. Please enable it in Settings.', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Open Settings', onPress: openSettings },
+            ]);
+          } else {
+            Alert.alert('GPS Error', 'Could not get GPS coordinates: ' + msg + '. Coordinates can be entered manually.');
+          }
+        }
+      }
+    };
+
+    // Immediate first attempt
+    await poll();
+    // Then poll every 2s
+    if (!gpsFilledRef.current) {
+      gpsWatchIdRef.current = setInterval(poll, 2000) as unknown as number;
     }
   };
 
   useEffect(() => {
     const init = async () => {
+      await requestStoragePermission();
       await loadDraft();
       await autoFill();
-
       try {
         const res = await getTemplate(templateId);
         setSections(res.data.data.sections || []);
-      } catch (err) {
-        Alert.alert('Error', 'Failed to load form template');
+      } catch {
+        Alert.alert('Error', 'Failed to load form template. Check your connection.');
       } finally {
         setLoading(false);
       }
     };
     init();
+    return () => {
+      // Stop GPS polling on unmount
+      if (gpsWatchIdRef.current !== null) {
+        clearInterval(gpsWatchIdRef.current);
+        gpsWatchIdRef.current = null;
+      }
+    };
   }, []);
 
-  // Auto-save draft to local storage
-  const saveDraft = async (answersToSave: Record<string, unknown>, photosToSave: Record<string, string[]>) => {
-    const draftData = {
-      submission_id: draftId,
-      assignment_id: assignmentId,
-      site_id: site_id,
-      answers: answersToSave,
-      photos: photosToSave,
-      saved_at: Date.now(),
-    };
-    await AsyncStorage.setItem(`draft_${assignmentId}`, JSON.stringify(draftData));
+  // Auto-save draft
+  const saveDraft = async (a: Record<string, unknown>, p: Record<string, string[]>) => {
+    await AsyncStorage.setItem(`draft_${assignmentId}`, JSON.stringify({
+      submission_id: draftId, assignment_id: assignmentId, site_id: site_id,
+      answers: a, photos: p, saved_at: Date.now(),
+    }));
   };
 
   const handleAnswer = (field: string, value: unknown) => {
@@ -136,67 +217,66 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
   };
 
   const takePhoto = async (fieldName: string) => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Camera access required'); return; }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: false,
-      quality: 0.7,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      const uri = result.assets[0].uri;
-      const updated = { ...photos, [fieldName]: [...(photos[fieldName] || []), uri] };
-      setPhotos(updated);
-      handleAnswer(fieldName, updated[fieldName]);
+    const hasCamera = await requestCameraPermission();
+    if (!hasCamera) {
+      Alert.alert('Camera Permission Required', 'ThufuDeploy needs camera access. Please enable it in Settings.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Open Settings', onPress: openSettings },
+      ]);
+      return;
     }
+    const options: CameraOptions = {
+      mediaType: 'photo', cameraType: 'back',
+      maxWidth: 1920, maxHeight: 1920, quality: 0.7, saveToPhotos: false,
+    };
+    launchCamera(options, (response: ImagePickerResponse) => {
+      if (response.didCancel) return;
+      if (response.errorCode) { Alert.alert('Camera Error', response.errorMessage || 'Failed to open camera.'); return; }
+      const asset = response.assets?.[0];
+      if (asset?.uri) {
+        const updated = { ...photos, [fieldName]: [...(photos[fieldName] || []), asset.uri] };
+        setPhotos(updated);
+        handleAnswer(fieldName, updated[fieldName]);
+      }
+    });
   };
 
   const pickPhoto = async (fieldName: string) => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') { Alert.alert('Permission needed', 'Photo library access required'); return; }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      quality: 0.7,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const options: CameraOptions = { mediaType: 'photo', selectionLimit: 10, maxWidth: 1920, maxHeight: 1920, quality: 0.7 } as any;
+    launchImageLibrary(options, (response: ImagePickerResponse) => {
+      if (response.didCancel) return;
+      if (response.errorCode) { Alert.alert('Gallery Error', response.errorMessage || 'Failed to open gallery.'); return; }
+      const uris = (response.assets || []).map(a => a.uri).filter(Boolean) as string[];
+      if (uris.length > 0) {
+        const updated = { ...photos, [fieldName]: [...(photos[fieldName] || []), ...uris] };
+        setPhotos(updated);
+        handleAnswer(fieldName, updated[fieldName]);
+      }
     });
-
-    if (!result.canceled) {
-      const uris = result.assets.map(a => a.uri);
-      const updated = { ...photos, [fieldName]: [...(photos[fieldName] || []), ...uris] };
-      setPhotos(updated);
-      handleAnswer(fieldName, updated[fieldName]);
-    }
   };
 
   const removePhoto = (fieldName: string, index: number) => {
-    const updated = { ...photos[fieldName] || [] };
+    const updated = [...(photos[fieldName] || [])];
     updated.splice(index, 1);
     setPhotos({ ...photos, [fieldName]: updated });
     handleAnswer(fieldName, updated);
   };
 
   const handleSubmit = async () => {
-    // Validate required fields
     const missing: string[] = [];
     for (const section of sections) {
       for (const q of section.questions) {
         if (q.required === 1) {
           const val = answers[q.field_name];
-          if (!val || (Array.isArray(val) && val.length === 0)) {
-            missing.push(q.label);
-          }
+          if (!val || (Array.isArray(val) && val.length === 0)) missing.push(q.label);
         }
       }
     }
-
     if (missing.length > 0) {
       Alert.alert('Missing Required Fields', `Please fill:\n${missing.join('\n')}`);
       return;
     }
-
     Alert.alert('Submit Survey', 'Save and submit this survey?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -207,13 +287,8 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
               record_type: recordType,
               submission_id: draftId || undefined,
               site_id: site_id,
-              answers: {
-                ...answers,
-                technician_contact: answers.technician_contact || '',
-                contractor_name: 'Innovis',
-              },
+              answers: { ...answers, contractor_name: 'Innovis' },
             };
-
             try {
               const res = await syncSubmission(payload);
               setDraftId(res.data.data.submission_id);
@@ -221,14 +296,11 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
               Alert.alert('Success', 'Survey submitted successfully!');
               navigation.navigate('Home');
             } catch {
-              // Offline — add to queue
               await addToQueue({ type: 'sync', payload, timestamp: Date.now() });
-              Alert.alert('Offline Saved', 'No internet connection. Your survey has been saved and will sync automatically when online.');
+              Alert.alert('Offline Saved', 'No internet. Your survey will sync when online.');
               navigation.navigate('Home');
             }
-          } finally {
-            setSaving(false);
-          }
+          } finally { setSaving(false); }
         },
       },
     ]);
@@ -236,12 +308,8 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
 
   const handleSaveDraft = async () => {
     setSaving(true);
-    try {
-      await saveDraft(answers, photos);
-      Alert.alert('Draft Saved', 'Your progress has been saved locally.');
-    } finally {
-      setSaving(false);
-    }
+    try { await saveDraft(answers, photos); Alert.alert('Draft Saved', 'Your progress has been saved locally.'); }
+    finally { setSaving(false); }
   };
 
   if (loading) return <View style={styles.centered}><ActivityIndicator size="large" color="#2563eb" /></View>;
@@ -251,6 +319,7 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
 
   return (
     <View style={styles.container}>
+
       {/* Progress Bar */}
       <View style={styles.progressBar}>
         <View style={[styles.progressFill, { width: `${progress}%` }]} />
@@ -275,7 +344,7 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
               {q.required === 1 && <Text style={styles.required}>*</Text>}
             </View>
 
-            {/* Text / Number input */}
+            {/* Text / Number / Textarea */}
             {(q.input_type === 'text' || q.input_type === 'number' || q.input_type === 'textarea') && (
               <TextInput
                 style={[styles.input, q.input_type === 'textarea' && styles.textarea]}
@@ -287,7 +356,7 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
               />
             )}
 
-            {/* GPS Auto */}
+            {/* GPS Auto-fill */}
             {q.input_type === 'gps' && (
               <View>
                 <TextInput
@@ -360,8 +429,46 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
               </View>
             )}
 
-            {/* Photo */}
-            {q.input_type === 'photo' && (
+            {/* Photo — GPS Screenshot special case */}
+            {q.input_type === 'photo' && q.field_name === 'gps_screenshot' && (
+              <View>
+                <TouchableOpacity
+                  style={[styles.photoButton, { backgroundColor: '#0f766e' }]}
+                  onPress={() => { setGpsScreenshotField(q.field_name); setShowGpsCapture(true); }}
+                >
+                  <Text style={styles.photoButtonText}>📍 Capture GPS Screenshot</Text>
+                </TouchableOpacity>
+                {(photos[q.field_name] || []).length > 0 && (
+                  <ScrollView horizontal style={styles.photoPreviewRow} showsHorizontalScrollIndicator={false}>
+                    {(photos[q.field_name] || []).map((uri, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.photoThumb}
+                        onPress={() => setPreviewPhoto(uri)}
+                        activeOpacity={0.85}
+                      >
+                        <Image source={{ uri }} style={styles.photoThumbImg} />
+                        <View style={styles.photoMagnify}>
+                          <Text style={styles.photoMagnifyText}>⤢</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.photoRemove}
+                          onPress={() => removePhoto(q.field_name, idx)}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 11 }}>✕</Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+                {(photos[q.field_name] || []).length === 0 && (
+                  <Text style={styles.photoCount}>No GPS screenshot captured yet</Text>
+                )}
+              </View>
+            )}
+
+            {/* Photo — regular camera */}
+            {q.input_type === 'photo' && q.field_name !== 'gps_screenshot' && (
               <View>
                 <View style={styles.photoActions}>
                   <TouchableOpacity style={styles.photoButton} onPress={() => takePhoto(q.field_name)}>
@@ -374,12 +481,23 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
                 {(photos[q.field_name] || []).length > 0 && (
                   <ScrollView horizontal style={styles.photoPreviewRow} showsHorizontalScrollIndicator={false}>
                     {(photos[q.field_name] || []).map((uri, idx) => (
-                      <View key={idx} style={styles.photoThumb}>
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.photoThumb}
+                        onPress={() => setPreviewPhoto(uri)}
+                        activeOpacity={0.85}
+                      >
                         <Image source={{ uri }} style={styles.photoThumbImg} />
-                        <TouchableOpacity style={styles.photoRemove} onPress={() => removePhoto(q.field_name, idx)}>
-                          <Text style={{ color: '#fff', fontSize: 12 }}>✕</Text>
+                        <View style={styles.photoMagnify}>
+                          <Text style={styles.photoMagnifyText}>⤢</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.photoRemove}
+                          onPress={() => removePhoto(q.field_name, idx)}
+                        >
+                          <Text style={{ color: '#fff', fontSize: 11 }}>✕</Text>
                         </TouchableOpacity>
-                      </View>
+                      </TouchableOpacity>
                     ))}
                   </ScrollView>
                 )}
@@ -423,9 +541,50 @@ export default function SurveyFormScreen({ navigation, route }: Props) {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* ── Full-Screen Photo Preview Modal ─────────────────────────────── */}
+      <Modal visible={!!previewPhoto} transparent animationType="fade" onRequestClose={() => setPreviewPhoto(null)}>
+        <View style={previewStyles.overlay}>
+          <TouchableOpacity style={previewStyles.closeArea} onPress={() => setPreviewPhoto(null)} activeOpacity={1} />
+          <Image source={{ uri: previewPhoto || '' }} style={previewStyles.fullImage} resizeMode="contain" />
+          <TouchableOpacity style={previewStyles.closeBtn} onPress={() => setPreviewPhoto(null)}>
+            <Text style={previewStyles.closeBtnText}>✕</Text>
+          </TouchableOpacity>
+        </View>
+      </Modal>
+
+      {/* ── GPS Screenshot Capture Modal ───────────────────────────────── */}
+      <GpsCaptureScreen
+        visible={showGpsCapture}
+        siteId={site_id}
+        siteName={site_name}
+        onResult={(data) => {
+          // Add to photos under the gps_screenshot field
+          const fieldName = gpsScreenshotField || 'gps_screenshot';
+          const updated = { ...photos, [fieldName]: [...(photos[fieldName] || []), data.screenshotPath] };
+          setPhotos(updated);
+          // Also fill in GPS answers
+          setAnswers(prev => ({
+            ...prev,
+            latitude: data.latitude,
+            longitude: data.longitude,
+            altitude: data.altitude,
+            gps_accuracy: data.accuracy,
+          }));
+          setGps({ lat: data.latitude, lng: data.longitude, alt: data.altitude, accuracy: data.accuracy });
+          handleAnswer(fieldName, updated[fieldName]);
+          setShowGpsCapture(false);
+        }}
+        onClose={() => setShowGpsCapture(false)}
+      />
+
     </View>
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STYLES
+// ─────────────────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f9fafb' },
@@ -453,8 +612,10 @@ const styles = StyleSheet.create({
   photoButton: { flex: 1, backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 12, alignItems: 'center' },
   photoButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
   photoPreviewRow: { flexDirection: 'row', marginBottom: 8 },
-  photoThumb: { marginRight: 8, position: 'relative' },
-  photoThumbImg: { width: 72, height: 72, borderRadius: 8 },
+  photoThumb: { marginRight: 8, position: 'relative', borderRadius: 8, overflow: 'hidden' },
+  photoThumbImg: { width: 72, height: 72 },
+  photoMagnify: { position: 'absolute', bottom: 4, right: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 4, paddingHorizontal: 3, paddingVertical: 1 },
+  photoMagnifyText: { color: '#fff', fontSize: 10 },
   photoRemove: { position: 'absolute', top: -6, right: -6, backgroundColor: '#ef4444', width: 20, height: 20, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   photoCount: { fontSize: 12, color: '#6b7280', textAlign: 'center' },
   gpsButton: { marginTop: 8, alignSelf: 'flex-start' },
@@ -469,4 +630,17 @@ const styles = StyleSheet.create({
   saveDraftText: { fontSize: 14, fontWeight: '500', color: '#6b7280' },
   submitBtn: { backgroundColor: '#10b981', borderColor: '#10b981' },
   submitBtnText: { color: '#fff', fontWeight: '700', fontSize: 14 },
+});
+
+const previewStyles = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center' },
+  fullImage: { width: '100%', height: '85%' },
+  closeArea: { position: 'absolute', top: 0, left: 0, right: 0, height: '15%' },
+  closeBtn: {
+    position: 'absolute', top: 48, right: 20,
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  closeBtnText: { color: '#fff', fontSize: 20 },
 });

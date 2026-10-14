@@ -11,7 +11,7 @@ import { login } from '../lib/api';
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'Login'> };
 
 export default function LoginScreen({ navigation }: Props) {
-  const [email, setEmail] = useState('surveyor@thufu.com');
+  const [email, setEmail] = useState('surveyor@innovis.com');
   const [password, setPassword] = useState('surveyor123');
   const [loading, setLoading] = useState(false);
 
@@ -74,7 +74,7 @@ export default function LoginScreen({ navigation }: Props) {
         </View>
 
         <View style={styles.hint}>
-          <Text style={styles.hintText}>Demo: surveyor@thufu.com / surveyor123</Text>
+          <Text style={styles.hintText}>Demo: surveyor@innovis.com / surveyor123</Text>
         </View>
       </View>
     </KeyboardAvoidingView>
@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
   subtitle: { textAlign: 'center', color: '#93c5fd', marginTop: 4, marginBottom: 40 },
   form: { backgroundColor: '#fff', borderRadius: 16, padding: 20 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16 },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 12, fontSize: 15, marginBottom: 16, color: '#1f2937' },
   button: { backgroundColor: '#2563eb', borderRadius: 10, paddingVertical: 14, alignItems: 'center', marginTop: 4 },
   buttonDisabled: { opacity: 0.7 },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 16 },

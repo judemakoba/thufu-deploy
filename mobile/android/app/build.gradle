@@ -2,29 +2,14 @@ apply plugin: "com.android.application"
 apply plugin: "org.jetbrains.kotlin.android"
 apply plugin: "com.facebook.react"
 
-
-// Navigate up: mobile/android -> mobile -> thufu-deploy (workspace root)
-def projectRoot = rootDir.getAbsoluteFile().getParentFile().getParentFile().getAbsolutePath()
-
 /**
  * This is the configuration block to customize your React Native Android app.
  * By default you don't need to apply any configuration, just uncomment the lines you need.
  */
 react {
-    // Hardcode paths using project root (thufu-deploy/) where node_modules live
-    // Expo is in root node_modules; react-native + @react-native in mobile/node_modules
-    // Direct entry point: App.tsx in mobile/ (no expo/AppEntry.js)
-    entryFile = file(projectRoot + "/mobile/App.tsx")
-    reactNativeDir = file(projectRoot + "/mobile/node_modules/react-native")
-    hermesCommand = projectRoot + "/mobile/node_modules/react-native/sdks/hermesc/%OS-BIN%/hermesc"
-    codegenDir = file(projectRoot + "/mobile/node_modules/@react-native/codegen")
-
-    // Use Expo CLI to bundle
-    cliFile = file(projectRoot + "/node_modules/expo/bin/cli")
-    bundleCommand = "export:embed"
-
-    // Tell RN CLI where to find the metro config
-    bundleConfig = file(projectRoot + "/mobile/metro.config.js")
+    /* Variants */
+    // Force JS bundling into debug APK so it works WITHOUT Metro dev server
+    debuggableVariants = []
 
     /* Folders */
     //   The root of your project, i.e. where "package.json" lives. Default is '..'
@@ -33,21 +18,15 @@ react {
     // reactNativeDir = file("../node_modules/react-native")
     //   The folder where the react-native Codegen package is. Default is ../node_modules/@react-native/codegen
     // codegenDir = file("../node_modules/@react-native/codegen")
-
-    /* Variants */
-    //   The list of variants to that are debuggable. For those we're going to
-    //   skip the bundling of the JS bundle and the assets. By default is just 'debug'.
-    //   If you add flavors like lite, prod, etc. you'll have to list your debuggableVariants.
-    // Force-bundle JS into debug APK so it works without Metro
-    debuggableVariants = []
-
-    // CRITICAL: Hermes must be ON — JSC crashes on 'window' in standalone APK
-    hermesEnabled = true
+    //   The cli.js file which is the React Native CLI entrypoint. Default is ../node_modules/react-native/cli.js
+    // cliFile = file("../node_modules/react-native/cli.js")
 
     /* Bundling */
     //   A list containing the node command and its flags. Default is just 'node'.
     // nodeExecutableAndArgs = ["node"]
-
+    //
+    //   The command to run when bundling. By default is 'bundle'
+    // bundleCommand = "ram-bundle"
     //
     //   The path to the CLI configuration file. Default is empty.
     // bundleConfig = file(../rn-cli.config.js)
@@ -73,7 +52,7 @@ react {
 /**
  * Set this to true to Run Proguard on Release builds to minify the Java bytecode.
  */
-def enableProguardInReleaseBuilds = (findProperty('android.enableProguardInReleaseBuilds') ?: false).toBoolean()
+def enableProguardInReleaseBuilds = false
 
 /**
  * The preferred build flavor of JavaScriptCore (JSC)
@@ -90,19 +69,16 @@ def jscFlavor = 'org.webkit:android-jsc:+'
 
 android {
     ndkVersion rootProject.ext.ndkVersion
-
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.thufu.deploy'
+    namespace "com.thufu.deploy"
     defaultConfig {
-        applicationId 'com.thufu.deploy'
+        applicationId "com.thufu.deploy"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
-        versionName "1.0.0"
-
-        buildConfigField("boolean", "REACT_NATIVE_UNSTABLE_USE_RUNTIME_SCHEDULER_ALWAYS", (findProperty("reactNative.unstable_useRuntimeSchedulerAlways") ?: true).toString())
+        versionName "1.0"
     }
     signingConfigs {
         debug {
@@ -120,34 +96,8 @@ android {
             // Caution! In production, you need to generate your own keystore file.
             // see https://reactnative.dev/docs/signed-apk-android.
             signingConfig signingConfigs.debug
-            shrinkResources (findProperty('android.enableShrinkResourcesInReleaseBuilds')?.toBoolean() ?: false)
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
-        }
-    }
-    packagingOptions {
-        jniLibs {
-            useLegacyPackaging (findProperty('expo.useLegacyPackaging')?.toBoolean() ?: false)
-        }
-    }
-}
-
-// Apply static values from `gradle.properties` to the `android.packagingOptions`
-// Accepts values in comma delimited lists, example:
-// android.packagingOptions.pickFirsts=/LICENSE,**/picasa.ini
-["pickFirsts", "excludes", "merges", "doNotStrip"].each { prop ->
-    // Split option: 'foo,bar' -> ['foo', 'bar']
-    def options = (findProperty("android.packagingOptions.$prop") ?: "").split(",");
-    // Trim all elements in place.
-    for (i in 0..<options.size()) options[i] = options[i].trim();
-    // `[] - ""` is essentially `[""].filter(Boolean)` removing all empty strings.
-    options -= ""
-
-    if (options.length > 0) {
-        println "android.packagingOptions.$prop += $options ($options.length)"
-        // Ex: android.packagingOptions.pickFirsts += '**/SCCS/**'
-        options.each {
-            android.packagingOptions[prop] += it
         }
     }
 }
@@ -155,25 +105,6 @@ android {
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
-
-    def isGifEnabled = (findProperty('expo.gif.enabled') ?: "") == "true";
-    def isWebpEnabled = (findProperty('expo.webp.enabled') ?: "") == "true";
-    def isWebpAnimatedEnabled = (findProperty('expo.webp.animated') ?: "") == "true";
-
-    if (isGifEnabled) {
-        // For animated gif support
-        implementation("com.facebook.fresco:animated-gif:${reactAndroidLibs.versions.fresco.get()}")
-    }
-
-    if (isWebpEnabled) {
-        // For webp support
-        implementation("com.facebook.fresco:webpsupport:${reactAndroidLibs.versions.fresco.get()}")
-        if (isWebpAnimatedEnabled) {
-            // Animated webp support
-            implementation("com.facebook.fresco:animated-webp:${reactAndroidLibs.versions.fresco.get()}")
-        }
-    }
-
     implementation("com.facebook.react:flipper-integration")
 
     if (hermesEnabled.toBoolean()) {
@@ -183,5 +114,4 @@ dependencies {
     }
 }
 
-apply from: file(projectRoot + "/node_modules/@react-native-community/cli-platform-android/native_modules.gradle");
-applyNativeModulesAppBuildGradle(project)
+apply from: file("../../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)

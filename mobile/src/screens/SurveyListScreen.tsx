@@ -4,15 +4,25 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import { getMyAssignments } from '../lib/api';
 
+interface Assignment {
+  id: string;
+  site_id: string;
+  site_name: string;
+  template_name: string;
+  template_id: string;
+  status: string;
+  record_type?: string;
+}
+
 type Props = { navigation: NativeStackNavigationProp<RootStackParamList, 'SurveyList'> };
 
 export default function SurveyListScreen({ navigation }: Props) {
-  const [assignments, setAssignments] = useState([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     getMyAssignments()
-      .then(r => setAssignments(r.data.data))
+      .then(r => setAssignments(r.data.data || []))
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
@@ -32,6 +42,8 @@ export default function SurveyListScreen({ navigation }: Props) {
               assignmentId: item.id,
               templateId: item.template_id,
               recordType: item.record_type || 'ground_info',
+              site_id: item.site_id,
+              site_name: item.site_name,
             })}
           >
             <Text style={styles.atcId}>{item.site_id}</Text>
